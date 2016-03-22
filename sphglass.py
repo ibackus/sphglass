@@ -32,7 +32,7 @@ if not os.path.exists(defaultparam):
     shutil.copyfile(defaults, defaultparam)
     print 'Setting up default params...saved to ' + defaultparam
 
-def glassBox(n, shape=[1,1,1], changaPreset='onecore', verbose=True, 
+def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=True, 
               fulloutput=False):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
@@ -81,7 +81,7 @@ def glassBox(n, shape=[1,1,1], changaPreset='onecore', verbose=True,
     
     return f
     
-def reglassify(changaPreset='onecore', verbose=True, fulloutput=False):
+def reglassify(changaPreset='default', verbose=True, fulloutput=False):
     """
     Run the most recently created glass (in the current working directory) 
     again to make it more glassy.
@@ -110,7 +110,7 @@ def reglassify(changaPreset='onecore', verbose=True, fulloutput=False):
     f = runchanga(paramname, changaPreset, verbose, fulloutput)
     return f
     
-def runchanga(paramname, changaPreset='onecore', verbose=True, fulloutput=False):
+def runchanga(paramname, changaPreset='default', verbose=True, fulloutput=False):
     """
     Time evolves a snapshot in ChaNGa and overwrites the ICs with the result.
     Also sets the velocity to zero.
