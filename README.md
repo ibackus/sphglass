@@ -1,5 +1,5 @@
 # sphglass
-A simple package for generating an SPH glass in a periodic box.  
+A simple package for generating an SPH glass in a periodic box written by Isaac Backus.
 
 # Installing sphglass
 Download and install depedencies:
