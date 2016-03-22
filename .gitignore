@@ -1,5 +1,6 @@
 # Package specific ignores
 glassdefaults.param
+*~
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
