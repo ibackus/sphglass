@@ -9,16 +9,14 @@ achInFile                = glass.std # Initial conditions
 achOutName               = glass     # file prefix
 
 # Units
-#dKpcUnit                 = 4.84813680873e-09 # FOR AU
-#dKpcUnit                 = 1 # FOR KPC
 dKpcUnit                 = 1
 dMeanMolWeight           = 1
 dMsolUnit                = 1
 
 # Time stepping parameters
-#iOutInterval             = 1
+#iOutInterval             = 1 # gets decided by sphglass
 nSteps                   = 20
-#dDelta                   = 1e-1
+#dDelta                   = 1e-1 # Gets decided by sphglass
 iLogInterval             = 1
 iCheckInterval           = 500000
 
@@ -30,21 +28,21 @@ bDoGas                   = 1
 bGasAdiabatic            = 0
 bGasIsothermal           = 1
 bKDK                     = 1
-bParaRead                = 0  # TEST (usually 1)
-bParaWrite               = 0  # TEST (usually 0)
+bParaRead                = 1 
+bParaWrite               = 0 
 bStandard                = 1
 bVDetails                = 1
-bViscosityLimiter        = 1 # 
+bViscosityLimiter        = 1
 dConstBeta               = 2. # usually 2
-dConstAlpha              = 10. # TEST (usually 1)
+dConstAlpha              = 10. # (This is the maximum alpha to be used)
 
 # SPH parameters
-dConstGamma              = 1.4 # TEST (usually 1.4)
+dConstGamma              = 1.4 
 dEta                     = 3.
 dEtaCourant              = 30.
 dExtraStore              = 0.5
 dFracFastGas             = 0.1
-dTheta                   = 0.7 # Normally 0.7
+dTheta                   = 0.7 
 iMaxRung                 = 30
 
 

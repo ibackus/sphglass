@@ -163,7 +163,8 @@ def boxSnap(n, shape):
     n = int(n)
     snap = pynbody.new(gas=n)
     snap['pos'] = SimArray(randomBox(n, shape),'au')
-    snap['mass'] = SimArray(np.ones(n), 'Msol')/n
+    volume = float(np.prod(shape))
+    snap['mass'] = volume*SimArray(np.ones(n), 'Msol')/n
     snap['vel'] = SimArray(np.zeros([n,3]), 'km s**-1')
     snap['temp'] = SimArray(np.ones(n),'K')
     snap['eps'] = SimArray(np.ones(n))
