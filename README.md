@@ -28,6 +28,8 @@ plt.plot(f['z'], f['rho'], 'x')
 # If you think this is not uniform enough, you try to make it more glassy:
 f = sphglass.reglassify()
 plt.plot(f['z'], f['rho'], 'x')
+# Otherwise, you can just re-glassify many times (re-run the time evolution)
+f = sphglass.glassbox(1000, [1,2,3], nreglass=5)
 ```
 
 # More information
