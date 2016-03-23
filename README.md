@@ -31,7 +31,7 @@ plt.plot(f['z'], f['rho'], 'x')
 ```
 
 # More information
-The algorithm used here for generating a glass is pretty simple. The procedure is:
+This works best on boxes that are close to cubic.  Waves can be generated in long, narrow boces.  The algorithm used here for generating a glass is pretty simple. The procedure is:
  1. Generate random particle positions in a box
  2. Create a tipsy snapshot with only gas particles
  3. Time evolve in a periodic box with no gravity and lots of artificial
