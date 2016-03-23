@@ -33,7 +33,7 @@ if not os.path.exists(defaultparam):
     print 'Setting up default params...saved to ' + defaultparam
 
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=True, 
-              fulloutput=False):
+              fulloutput=False, nreglass=0):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
     ChaNGa.  The procedure is:
@@ -55,6 +55,10 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=True,
     fulloutput : bool
         If True, all the snapshots for each time step during the time evolution
         will be output.
+    nreglass : int
+        The number of times to re-run the time evolution using reglassify().
+        Each time the snapshot is time evolved the velocities are set to zero.
+        This is useful especially with long boxes where waves can form.
     
     Returns
     -------
@@ -78,6 +82,10 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=True,
     snap.write(fmt=pynbody.tipsy.TipsySnap, filename=ICname)
     # Run ChaNGa to make a glass
     f = runchanga(paramname, changaPreset, verbose, fulloutput)
+    
+    for i in range(nreglass):
+        
+        f = reglassify(changaPreset, verbose, fulloutput)
     
     return f
     
