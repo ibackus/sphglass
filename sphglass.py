@@ -32,7 +32,7 @@ if not os.path.exists(defaultparam):
     shutil.copyfile(defaults, defaultparam)
     print 'Setting up default params...saved to ' + defaultparam
 
-def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=True, 
+def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
               fulloutput=False, nreglass=0):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
@@ -142,7 +142,14 @@ def runchanga(paramname, changaPreset='default', verbose=True, fulloutput=False)
     
     param = diskpy.utils.configparser(paramname,'param')
     command = changa_command(paramname, changaPreset)
-    changa_run(command, verbose=verbose, force_wait=True)
+    p = changa_run(command, verbose=False, force_wait=False)
+    
+    for line in iter(p.stdout.readline, ''):
+            
+            if verbose:
+                print line,
+            elif line[0:5] == 'Step:':
+                print line.strip(), ' Total steps: ', param['nSteps']
     
     # move results and clean up
     fname = param['achOutName'] + '.{0:06}'.format(param['nSteps'])
