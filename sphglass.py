@@ -33,7 +33,7 @@ if not os.path.exists(defaultparam):
     print 'Setting up default params...saved to ' + defaultparam
 
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
-              fulloutput=False, nreglass=0):
+              fulloutput=False, nreglass=3):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
     ChaNGa.  The procedure is:
