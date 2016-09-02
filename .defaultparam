@@ -23,6 +23,7 @@ iCheckInterval           = 500000
 iVerbosity = 0
 
 # Fflags for SPH + grav
+bEpsAccStep              = 0
 bDoDensity               = 0
 bDoGas                   = 1
 bGasAdiabatic            = 0
@@ -44,5 +45,5 @@ dExtraStore              = 0.5
 dFracFastGas             = 0.1
 dTheta                   = 0.7 
 iMaxRung                 = 30
-
+nSmooth                  = 32
 
