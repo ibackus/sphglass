@@ -56,8 +56,11 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     fulloutput : bool
         If True, all the snapshots for each time step during the time evolution
         will be output.
-    nreglass : int
-        The number of times to re-run the time evolution using reglassify().
+    accuracy : float
+        A parameter to scale the required accuracy for glass convergence.  The
+        glass is evoled until (stddev(rho) * nSmooth) < accuracy
+    max_reglass : int
+        The maximum number of times to re-run the time evolution using reglassify().
         Each time the snapshot is time evolved the velocities are set to zero.
         This is useful especially with long boxes where waves can form.
     
