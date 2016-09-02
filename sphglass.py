@@ -18,6 +18,7 @@ import pynbody
 SimArray = pynbody.array.SimArray
 import diskpy
 from diskpy.ICgen.ICgen_utils import changa_command, changa_run
+import sys
 
 # Constants
 defaultparam = 'glassdefaults.param'
@@ -33,7 +34,7 @@ if not os.path.exists(defaultparam):
     print 'Setting up default params...saved to ' + defaultparam
 
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
-              fulloutput=False, nreglass=3):
+              fulloutput=False, accuracy=0.25, max_reglass=50):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
     ChaNGa.  The procedure is:
@@ -72,20 +73,45 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     If you find the box is not sufficiently glassy, you can time evolve it
     again by running reglassify()
     """
+    if max_reglass is None:
+        
+        max_reglass = np.inf
+        
     # Generate snapshot with random positions
     snap = boxSnap(n, shape)
     param = makeParam(snap, shape, fulloutput)
     # Save snapshot and param
     paramname = param['achOutName'] + '.param'
     ICname = param['achInFile']
+    nSmooth = param['nSmooth']
     diskpy.utils.configsave(param, paramname)
     snap.write(fmt=pynbody.tipsy.TipsySnap, filename=ICname)
     # Run ChaNGa to make a glass
     f = runchanga(paramname, changaPreset, verbose, fulloutput)
     
-    for i in range(nreglass):
+    i = 1
+    
+    while i < max_reglass:
         
+        relvar = f['rho'].std() * nSmooth
+        print 'ITERATION:', i
+        print 'TARGET ACCURACY:', accuracy
+        print 'CURRENT ACCURACY:', relvar
+        sys.stdout.flush()
+        
+        if relvar <= accuracy:
+            
+            # Success, we have converged to a glass
+            print 'Successfully converged to a glass in {0} iterations'.format(i)
+            break
+            
         f = reglassify(changaPreset, verbose, fulloutput)
+        i += 1
+        
+    
+#    for i in range(nreglass):
+#        
+#        f = reglassify(changaPreset, verbose, fulloutput)
     
     return f
     
@@ -144,12 +170,21 @@ def runchanga(paramname, changaPreset='default', verbose=True, fulloutput=False)
     command = changa_command(paramname, changaPreset)
     p = changa_run(command, verbose=False, force_wait=False)
     
+    currentStep = 0
+    
     for line in iter(p.stdout.readline, ''):
             
             if verbose:
                 print line,
             elif line[0:5] == 'Step:':
-                print line.strip(), ' Total steps: ', param['nSteps']
+                
+                line = line.strip()
+                i = int(float(line.split()[1]))
+                
+                if i > currentStep:
+                    
+                    currentStep = i
+                    print line, ' Total steps: ', param['nSteps']
     
     # move results and clean up
     fname = param['achOutName'] + '.{0:06}'.format(param['nSteps'])
@@ -182,7 +217,7 @@ def boxSnap(n, shape):
     snap['mass'] = volume*SimArray(np.ones(n), 'Msol')/n
     snap['vel'] = SimArray(np.zeros([n,3]), 'km s**-1')
     snap['temp'] = SimArray(np.ones(n),'K')
-    snap['eps'] = SimArray(np.ones(n))
+    snap['eps'] = SimArray(np.ones(n))*max(shape)
     snap['rho'] = SimArray(np.ones(n), 'Msol kpc**-3')
     
     return snap
@@ -220,6 +255,8 @@ def runTime(snap, param):
     L = particleVol**(1,3)
     
     t = float(64 * L/cs)
+    # multiply by a 'fudge' factor
+    t *= 0.3
     return t
 
 def makeParam(snap, boxShape, fulloutput=False):
