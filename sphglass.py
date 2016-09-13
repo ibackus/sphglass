@@ -19,6 +19,7 @@ SimArray = pynbody.array.SimArray
 import diskpy
 from diskpy.ICgen.ICgen_utils import changa_command, changa_run
 import sys
+import shutil
 
 # Constants
 defaultparam = 'glassdefaults.param'
@@ -32,6 +33,18 @@ if not os.path.exists(defaultparam):
     defaults = os.path.join(directory, '.defaultparam')
     shutil.copyfile(defaults, defaultparam)
     print 'Setting up default params...saved to ' + defaultparam
+    
+def _loadDefaults():
+    
+    return diskpy.utils.configparser(defaultparam, 'param')
+    
+def filenames():
+    
+    param = _loadDefaults()
+    inFile = param['achInFile']
+    outPrefix = param['achOutName']
+    
+    return inFile, outPrefix
 
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
               fulloutput=False, accuracy=0.25, max_reglass=50):
@@ -118,6 +131,39 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     
     return f
     
+def glassify(snapshot, shape, changaPreset='default', verbose=False, fulloutput=False):
+    """
+    Glassifies a snapshot, saves the results to the default filename (see 
+    sphglass.filenames()) and returns the snapshot.  snapshot can be a filename
+    or a pynbody SimSnap
+    """
+    
+    inFile, fPrefix = filenames()
+    paramname = fPrefix + '.param'
+    
+    if not isinstance(snapshot, str):
+        
+        snapshot.write(filename=inFile, fmt=pynbody.tipsy.TipsySnap)
+        snapshotName = inFile
+        
+    else:
+        
+        snapshotName = snapshot
+        snapshot = pynbody.load(snapshotName)
+        
+    try:
+        
+        param = makeParam(snapshot, shape, fulloutput)
+        diskpy.utils.configsave(param, paramname, 'param')
+        shutil.move(snapshotName, inFile)
+        glass = reglassify(changaPreset, verbose, fulloutput)
+        
+    finally:
+        
+        shutil.move(inFile, snapshotName)
+        
+    return glass
+    
 def reglassify(changaPreset='default', verbose=True, fulloutput=False):
     """
     Run the most recently created glass (in the current working directory) 
@@ -141,8 +187,7 @@ def reglassify(changaPreset='default', verbose=True, fulloutput=False):
     """
     
     # Get the default paramname
-    param = diskpy.utils.configparser(defaultparam, 'param')
-    paramname = param['achOutName'] + '.param'
+    paramname = filenames()[1] + '.param'
     # Glassify
     f = runchanga(paramname, changaPreset, verbose, fulloutput)
     return f
