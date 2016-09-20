@@ -48,7 +48,7 @@ def filenames():
     return inFile, outPrefix
 
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
-              fulloutput=False, accuracy=0.25, max_reglass=50, usegrid=False,
+              fulloutput=False, max_reglass=50, usegrid=False,
               randomness=1.):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
@@ -72,9 +72,6 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     fulloutput : bool
         If True, all the snapshots for each time step during the time evolution
         will be output.
-    accuracy : float
-        A parameter to scale the required accuracy for glass convergence.  The
-        glass is evoled until (stddev(rho) * nSmooth) < accuracy
     max_reglass : int
         The maximum number of times to re-run the time evolution using reglassify().
         Each time the snapshot is time evolved the velocities are set to zero.
@@ -116,23 +113,27 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     f = runchanga(paramname, changaPreset, verbose, fulloutput)
     
     i = 1
-    
-    while i < max_reglass:
+    oldvar = np.inf
+    relvar = f['rho'].std() * nSmooth
+    while i < max_reglass and (relvar < oldvar):
         
-        relvar = f['rho'].std() * nSmooth
+        #relvar = f['rho'].std() * nSmooth
         print 'ITERATION:', i
-        print 'TARGET ACCURACY:', accuracy
         print 'CURRENT ACCURACY:', relvar
         sys.stdout.flush()
-        
-        if relvar <= accuracy:
-            
-            # Success, we have converged to a glass
-            print 'Successfully converged to a glass in {0} iterations'.format(i)
-            break
             
         f = reglassify(changaPreset, verbose, fulloutput)
+        oldvar = relvar
+        relvar = f['rho'].std() * nSmooth
         i += 1
+        
+    # Print messages to finalize
+    if relvar >= oldvar:
+        print 'aborted: variance in rho stopped decreasing'
+    if i == max_reglass:
+        print 'aborted: reach max_reglass'
+    print 'Final normalized variance in rho:', relvar
+    print 'Completed in', i, 'iterations'
     
     return f
     
