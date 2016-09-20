@@ -20,6 +20,7 @@ import diskpy
 from diskpy.ICgen.ICgen_utils import changa_command, changa_run
 import sys
 import shutil
+import itertools
 
 # Constants
 defaultparam = 'glassdefaults.param'
@@ -47,7 +48,8 @@ def filenames():
     return inFile, outPrefix
 
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
-              fulloutput=False, accuracy=0.25, max_reglass=50):
+              fulloutput=False, accuracy=0.25, max_reglass=50, usegrid=False,
+              randomness=1.):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
     ChaNGa.  The procedure is:
@@ -58,8 +60,9 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     
     Parameters
     ----------
-    n : int
-        Number of particles
+    n : int or list/array-like
+        Number of particles (if int) or grid resolution [nx, ny, nz] along each
+        axis (only if usegrid=True) 
     shape : array-like
         Shape of the box (x, y, z).  The box will be centered around the origin.
     changaPreset : str
@@ -76,6 +79,13 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
         The maximum number of times to re-run the time evolution using reglassify().
         Each time the snapshot is time evolved the velocities are set to zero.
         This is useful especially with long boxes where waves can form.
+    usegrid : bool
+        Use a grid to seed intial positions.  The particles will be randomly 
+        shifted around the grid locations
+    randomness : float
+        If usegrid=True, specifies by what fraction of the grid spacing
+        particles will be randomly shifted
+    
     
     Returns
     -------
@@ -94,7 +104,7 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
         max_reglass = np.inf
         
     # Generate snapshot with random positions
-    snap = boxSnap(n, shape)
+    snap = boxSnap(n, shape, usegrid, randomness)
     param = makeParam(snap, shape, fulloutput)
     # Save snapshot and param
     paramname = param['achOutName'] + '.param'
@@ -123,11 +133,6 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
             
         f = reglassify(changaPreset, verbose, fulloutput)
         i += 1
-        
-    
-#    for i in range(nreglass):
-#        
-#        f = reglassify(changaPreset, verbose, fulloutput)
     
     return f
     
@@ -254,13 +259,36 @@ def runchanga(paramname, changaPreset='default', verbose=True, fulloutput=False)
     
     return f
     
-def boxSnap(n, shape):
+def boxSnap(n, shape, usegrid=False, randomness=0.):
     """
     Initialize snap shot with n randomly placed gas particles inside a box.
+    
+    if usegrid=True, a grid is used to seed the particle positions (see grid())
+    n can then be [nx, ny, nz, ...] to specify the resolution along each
+    dimension.  Otherwise, n is an int and a uniform spacing is attempted.
     """
+    nDim = len(shape)
+    if usegrid:
+        
+        if hasattr(n, '__iter__'):
+            
+            res = n
+            n = np.product(res)
+            
+        else:
+            
+            alpha = (float(n)/np.product(shape))**(1.0/nDim)
+            res = np.array([alpha * L for L in shape])
+            res = np.round(res).astype(int)
+            n = np.product(res)
+        
     n = int(n)
     snap = pynbody.new(gas=n)
-    snap['pos'] = SimArray(randomBox(n, shape),'au')
+    if usegrid:
+        pos = grid(res, shape, randomness)
+    else:
+        pos = randomBox(n, shape)
+    snap['pos'] = SimArray(pos,'au')
     volume = float(np.prod(shape))
     snap['mass'] = volume*SimArray(np.ones(n), 'Msol')/n
     snap['vel'] = SimArray(np.zeros([n,3]), 'km s**-1')
@@ -365,7 +393,58 @@ def randomBox(n, shape=[1,1,1]):
         x[:,i] *= L
     
     return x
+
+def grid(res=[10, 10, 10], shape=[1,1,1], randomness=0., putInBox=True):
+    """
+    Creates a grid of positions shifted randomly in ND by a fixed amount 
+    controlled by randomness.  The positions are shifted randomly (in each dim)
+    by randomness * dx
+    """
+    if len(res) != len(shape):
+        
+        raise ValueError, 'res and shape length do not match'
+        
+    bounds = []
+    dxs = []
     
+    for L, n in zip(shape, res):
+        
+        x = np.linspace(-L/2., L/2., n+1)[1:]
+        dx = x[1] - x[0]
+        x -= dx/2.
+        bounds.append(x)
+        dxs.append(dx)
+        
+    pos = np.array([a for a in itertools.product(*bounds)])
+    
+    for i in range(len(res)):
+        
+        pos[:,i] += dxs[i] * randomness * (np.random.random(len(pos)) - 0.5)
+    
+    if putInBox:
+        
+        placeInBox(pos, shape)
+        
+    return pos
+    
+def placeInBox(pos, boxshape=[1,1,1]):
+    """
+    Anything outside of the box bounds specified by boxshape will be shifted
+    by one box length.  This means anything more than L away from the box
+    boundary will not be shifted to inside the box.
+    
+    IN PLACE
+    """
+    N, nDim = pos.shape       
+    for i in range(nDim):
+        
+        L = boxshape[i]
+        mask = pos[:, i] > L/2.
+        pos[mask, i] -= L
+        mask = pos[:, i] < -L/2.
+        pos[mask, i] += L
+        
+
 def _rhovar():
     """
     gets stddev(rho)/mean(rho) vs time
