@@ -1,0 +1,48 @@
+# Period boundary conditions parameters
+bPeriodic = 1
+nReplicas = 1
+bDoGravity      = 0
+
+# Filenames
+achInFile                = glass.std # Initial conditions
+achOutName               = glass     # file prefix
+
+# Units
+dKpcUnit                 = 1
+dMeanMolWeight           = 1
+dMsolUnit                = 1
+
+# Time stepping parameters
+#iOutInterval             = 1 # gets decided by sphglass
+nSteps                   = 20
+#dDelta                   = 1e-1 # Gets decided by sphglass
+iLogInterval             = 1
+iCheckInterval           = 500000
+iVerbosity = 0
+
+# Fflags for SPH + grav
+bEpsAccStep              = 0
+bDoDensity               = 0
+bDoGas                   = 1
+bGasAdiabatic            = 0
+bGasIsothermal           = 1
+bKDK                     = 1
+bParaRead                = 1 
+bParaWrite               = 0 
+bStandard                = 1
+bVDetails                = 1
+bViscosityLimiter        = 1
+# TURN OFF VISCOSITY
+dConstBeta               = 0. # usually 2
+dConstAlpha              = 0.
+
+# SPH parameters
+dConstGamma              = 1.4 
+dEta                     = 3.
+dEtaCourant              = 0.4
+dExtraStore              = 0.5
+dFracFastGas             = 0.1
+dTheta                   = 0.7 
+iMaxRung                 = 30
+
+

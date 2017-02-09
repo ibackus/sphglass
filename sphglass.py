@@ -10,7 +10,6 @@ Created on Wed Mar 16 17:37:10 2016
 
 @author: ibackus
 """
-
 import shutil
 import os
 import numpy as np
@@ -18,8 +17,6 @@ import pynbody
 SimArray = pynbody.array.SimArray
 import diskpy
 from diskpy.ICgen.ICgen_utils import changa_command, changa_run
-import sys
-import shutil
 import itertools
 
 # Constants
@@ -36,20 +33,24 @@ if not os.path.exists(defaultparam):
     print 'Setting up default params...saved to ' + defaultparam
     
 def _loadDefaults():
-    
+    """
+    Load default .param file
+    """
     return diskpy.utils.configparser(defaultparam, 'param')
     
 def filenames():
-    
+    """
+    Return default filenames
+    """
     param = _loadDefaults()
     inFile = param['achInFile']
     outPrefix = param['achOutName']
     
     return inFile, outPrefix
 
-def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False, 
-              fulloutput=False, max_reglass=50, usegrid=False,
-              randomness=1.):
+def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
+             fulloutput=False, usegrid=False, randomness=1., nSmooth=32, 
+             runTimeScale=1., dampingScale=1., extraPars={}):
     """
     Generates an sph glass in a box with periodic boundary conditions using 
     ChaNGa.  The procedure is:
@@ -72,9 +73,6 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     fulloutput : bool
         If True, all the snapshots for each time step during the time evolution
         will be output.
-    max_reglass : int
-        The maximum number of times to re-run the time evolution using reglassify().
-        Each time the snapshot is time evolved the velocities are set to zero.
         This is useful especially with long boxes where waves can form.
     usegrid : bool
         Use a grid to seed intial positions.  The particles will be randomly 
@@ -82,6 +80,15 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     randomness : float
         If usegrid=True, specifies by what fraction of the grid spacing
         particles will be randomly shifted
+    nSmooth : int
+        Number of neighbors to use for SPH
+    runTimeScale : float
+        Factor to increase ChaNGa run time by
+    dampingScale : float
+        Factor to increase the damping force in ChaNGa
+    extraPars : dict
+        param dict defining params to override the default ChaNGa runtime
+        params defined here.
     
     
     Returns
@@ -93,51 +100,27 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     
     Notes
     -----
+    The snapshot will saved to glass.std
+    
     If you find the box is not sufficiently glassy, you can time evolve it
-    again by running reglassify()
+    again by running reglassify() which will run glass.std again.
     """
-    if max_reglass is None:
-        
-        max_reglass = np.inf
-        
     # Generate snapshot with random positions
     snap = boxSnap(n, shape, usegrid, randomness)
-    param = makeParam(snap, shape, fulloutput)
+    param = makeParam(snap, shape, fulloutput, runTimeScale, dampingScale)
     # Save snapshot and param
     paramname = param['achOutName'] + '.param'
     ICname = param['achInFile']
-    nSmooth = param['nSmooth']
+    param['nSmooth'] = nSmooth
+    param.update(extraPars)
     diskpy.utils.configsave(param, paramname)
     snap.write(fmt=pynbody.tipsy.TipsySnap, filename=ICname)
     # Run ChaNGa to make a glass
     f = runchanga(paramname, changaPreset, verbose, fulloutput)
-    
-    i = 1
-    oldvar = np.inf
-    relvar = f['rho'].std() * nSmooth
-    while i < max_reglass and (relvar < oldvar):
-        
-        #relvar = f['rho'].std() * nSmooth
-        print 'ITERATION:', i
-        print 'CURRENT ACCURACY:', relvar
-        sys.stdout.flush()
-            
-        f = reglassify(changaPreset, verbose, fulloutput)
-        oldvar = relvar
-        relvar = f['rho'].std() * nSmooth
-        i += 1
-        
-    # Print messages to finalize
-    if relvar >= oldvar:
-        print 'aborted: variance in rho stopped decreasing'
-    if i == max_reglass:
-        print 'aborted: reach max_reglass'
-    print 'Final normalized variance in rho:', relvar
-    print 'Completed in', i, 'iterations'
-    
     return f
     
-def glassify(snapshot, shape, changaPreset='default', verbose=False, fulloutput=False):
+def glassify(snapshot, shape, changaPreset='default', verbose=False, \
+             fulloutput=False):
     """
     Glassifies a snapshot, saves the results to the default filename (see 
     sphglass.filenames()) and returns the snapshot.  snapshot can be a filename
@@ -321,22 +304,28 @@ def getcs(snap, param):
     
     return cs
 
-def runTime(snap, param):
+def runTime(snap, param, boxShape):
     """
     From a SimSnap and a param file (or dict), estimate run time (in simulation
     units) required to evolve to a glass
     """
+    h = estSmoothLength(snap, boxShape, param)
     cs = getcs(snap, param)
-    shape = snap['pos'].max(0) - snap['pos'].min(0)
-    particleVol = np.prod(shape)/len(snap)
-    L = particleVol**(1,3)
-    
-    t = float(64 * L/cs)
-    # multiply by a 'fudge' factor
-    t *= 0.3
+    t = 20 * h/cs
     return t
 
-def makeParam(snap, boxShape, fulloutput=False):
+def estSmoothLength(snap, boxShape, param):
+    """
+    Get an estimate of a reasonable smoothing length for a snapshot
+    """
+    V = np.prod(boxShape)
+    N = len(snap)
+    nDim = len(boxShape)
+    nSmooth = param.get('nSmooth', 32)
+    h = 0.5 * ( 3*nSmooth*V/(4*np.pi*N))**(1./nDim)
+    return h
+
+def makeParam(snap, boxShape, fulloutput=False, runTimeScale=1., dampingScale=1.):
     """
     Make a param dict for creating a glass
     """    
@@ -347,7 +336,7 @@ def makeParam(snap, boxShape, fulloutput=False):
     param['dyPeriod'] = float(boxShape[1])
     param['dzPeriod'] = float(boxShape[2])
     # Calculate run-time
-    t = runTime(snap, param)
+    t = runTime(snap, param, boxShape) * runTimeScale
     param['dDelta'] = t/param['nSteps']
     
     # Setup output interval
@@ -358,25 +347,11 @@ def makeParam(snap, boxShape, fulloutput=False):
     else:
         
         param['iOutInterval'] = param['nSteps']
-    
-    # Check that the courant condition isn't too weak.  A very weak courant
-    # condition can result in particles traveling more than 1 box-length
-    # in a single step.  This raises an error in ChaNGa
-    V = np.prod(boxShape)
-    N = len(snap)
-    nSmooth = param.get('nSmooth', 32)
-    h = 0.5 * ( 3*nSmooth*V/(4*np.pi*N))**(1./3)
-    h = float(h) * (1 + 1./np.sqrt(N)) # include correction for poisson noise
-    L = min(boxShape)
-    
-    courantMax = L/(50*h)
-    
-    if param['dEtaCourant'] > courantMax:
         
-        param['dEtaCourant'] = courantMax
-        print 'Low resolution.  Dropping dEtaCourant to ', courantMax
-        print 'This is to avoid particles moving more than one box length in a tstep'
-        
+    h = estSmoothLength(snap, boxShape, param)
+    cs = getcs(snap, param)
+    param['dGlassDamper'] = float(cs/h) * dampingScale
+    
     return param
     
 def randomBox(n, shape=[1,1,1]):
@@ -445,23 +420,3 @@ def placeInBox(pos, boxshape=[1,1,1]):
         mask = pos[:, i] < -L/2.
         pos[mask, i] += L
         
-
-def _rhovar():
-    """
-    gets stddev(rho)/mean(rho) vs time
-    
-    returns rhostd, t
-    """
-    
-    fnames = diskpy.pychanga.get_fnames('glass')
-    fs = []
-    for fname in fnames:
-        fs.append(pynbody.load(fname, paramname='glass.param'))
-    rhos = np.zeros(len(fs))    
-    t = np.zeros(len(fs))
-    for i, f in enumerate(fs):
-        
-        rhos[i] = f['rho'].std()/f['rho'].mean()
-        t[i] = diskpy.pychanga.snapshot_time(f)
-    
-    return rhos, t
