@@ -59,6 +59,10 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
         3. Time evolve in a periodic box with no gravity and lots of artificial
             viscosity.
     
+    ND-SPH is supported for SPH in dimensions 1, 2, and 3 IF ChaNGa has been
+    properly compiled with NDPSH.  The number of dimensions to run in is 
+    from the length of shape.
+    
     Parameters
     ----------
     n : int or list/array-like
@@ -83,9 +87,11 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     nSmooth : int
         Number of neighbors to use for SPH
     runTimeScale : float
-        Factor to increase ChaNGa run time by
+        Factor to increase ChaNGa run time by.  If you think your glasses are
+        not getting fully settled into a glass state, try increasing this
+        number.
     dampingScale : float
-        Factor to increase the damping force in ChaNGa
+        Factor to increase the damping force in ChaNGa.
     extraPars : dict
         param dict defining params to override the default ChaNGa runtime
         params defined here.
@@ -252,6 +258,11 @@ def boxSnap(n, shape, usegrid=False, randomness=0.):
     dimension.  Otherwise, n is an int and a uniform spacing is attempted.
     """
     nDim = len(shape)
+    if (nDim > 3) or (nDim < 1):
+        
+        raise ValueError, 'Only supported dimensions are 1, 2, 3. try'\
+        'different shape'
+        
     if usegrid:
         
         if hasattr(n, '__iter__'):
@@ -272,7 +283,9 @@ def boxSnap(n, shape, usegrid=False, randomness=0.):
         pos = grid(res, shape, randomness)
     else:
         pos = randomBox(n, shape)
-    snap['pos'] = SimArray(pos,'au')
+    
+    i0 = 3-nDim
+    snap['pos'][:, i0:] = SimArray(pos,'au')
     volume = float(np.prod(shape))
     snap['mass'] = volume*SimArray(np.ones(n), 'Msol')/n
     snap['vel'] = SimArray(np.zeros([n,3]), 'km s**-1')
@@ -328,17 +341,27 @@ def estSmoothLength(snap, boxShape, param):
 def makeParam(snap, boxShape, fulloutput=False, runTimeScale=1., dampingScale=1.):
     """
     Make a param dict for creating a glass
+    
+    The number of dimensions, len(boxShape), must be 1, 2, or 3.
     """    
     # Get default params
     param = diskpy.utils.configparser(defaultparam)
     # Set Box size
-    param['dxPeriod'] = float(boxShape[0])
-    param['dyPeriod'] = float(boxShape[1])
-    param['dzPeriod'] = float(boxShape[2])
+    nDim = len(boxShape)
+    maxL = max(boxShape)
+    if nDim < 3:
+        param['dxPeriod'] = 100 * maxL
+    else:
+        param['dxPeriod'] = float(boxShape[0])
+    if nDim < 2:
+        param['dyPeriod'] = 100 * maxL
+    else:
+        param['dyPeriod'] = float(boxShape[-2])
+        
+    param['dzPeriod'] = float(boxShape[-1])
     # Calculate run-time
     t = runTime(snap, param, boxShape) * runTimeScale
     param['dDelta'] = t/param['nSteps']
-    
     # Setup output interval
     if fulloutput:
         
