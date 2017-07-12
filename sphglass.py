@@ -48,6 +48,11 @@ def filenames():
     
     return inFile, outPrefix
 
+def glassNormalDist(n, height, baseshape=[], changaPreset='default', verbose=False, 
+                    fulloutput=False, nSmooth=32, runTimeScale=1., 
+                    dampingScale=1., extraPars={}):
+    pass
+
 def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
              fulloutput=False, usegrid=False, randomness=1., nSmooth=32, 
              runTimeScale=1., dampingScale=1., extraPars={}):
@@ -113,7 +118,7 @@ def glassBox(n, shape=[1,1,1], changaPreset='default', verbose=False,
     """
     # Generate snapshot with random positions
     snap = boxSnap(n, shape, usegrid, randomness)
-    param = makeParam(snap, shape, fulloutput, runTimeScale, dampingScale)
+    param = makeBoxParam(snap, shape, fulloutput, runTimeScale, dampingScale)
     # Save snapshot and param
     paramname = param['achOutName'] + '.param'
     ICname = param['achInFile']
@@ -148,7 +153,7 @@ def glassify(snapshot, shape, changaPreset='default', verbose=False, \
         
     try:
         
-        param = makeParam(snapshot, shape, fulloutput)
+        param = makeBoxParam(snapshot, shape, fulloutput)
         diskpy.utils.configsave(param, paramname, 'param')
         shutil.move(snapshotName, inFile)
         glass = reglassify(changaPreset, verbose, fulloutput)
@@ -248,6 +253,43 @@ def runchanga(paramname, changaPreset='default', verbose=True, fulloutput=False)
     f.write()    
     
     return f
+
+
+def randomNormal(n, height, baseshape=[]):
+    """
+    Generate random positions, normally distributed along z.
+    """
+    nDim = len(baseshape) + 1
+    pos = np.zeros([n, nDim])
+    z = np.random.randn(n)
+    z *= height
+    pos[:,-1] = z
+       
+    for i in range(nDim - 1):
+        
+        pos[:, i] = np.random.rand(n) * baseshape[i]
+        
+    return pos
+
+def normalSnap(n, height, baseshape=[]):
+    """
+    Generate a snapshot with positions normally distributed along z
+    """
+    
+    snap = pynbody.new(gas=n)
+    nDim = len(baseshape) + 1
+    pos = randomNormal(n, height, baseshape)
+    i0 = 3-nDim
+    snap['pos'][:, i0:] = SimArray(pos,'au')
+    volume = np.sqrt(2*np.pi) * height
+    if nDim > 1:
+        volume *= np.prod(baseshape)
+    snap['mass'] = volume*SimArray(np.ones(n), 'Msol')/n
+    snap['vel'] = SimArray(np.zeros([n,3]), 'km s**-1')
+    snap['temp'] = SimArray(np.ones(n),'K')
+    snap['eps'] = SimArray(np.ones(n))*height * 5
+    snap['rho'] = SimArray(np.ones(n), 'Msol kpc**-3')
+    
     
 def boxSnap(n, shape, usegrid=False, randomness=0.):
     """
@@ -317,36 +359,40 @@ def getcs(snap, param):
     
     return cs
 
-def runTime(snap, param, boxShape):
+def runTime(snap, param, boxShape, kind='box'):
     """
     From a SimSnap and a param file (or dict), estimate run time (in simulation
     units) required to evolve to a glass
     """
-    h = estSmoothLength(snap, boxShape, param)
+    h = estSmoothLength(snap, boxShape, param, kind=kind)
     cs = getcs(snap, param)
     t = 20 * h/cs
     return t
 
-def estSmoothLength(snap, boxShape, param):
+def estSmoothLength(snap, boxShape, param, kind='box'):
     """
     Get an estimate of a reasonable smoothing length for a snapshot
     """
-    V = np.prod(boxShape)
-    N = len(snap)
-    nDim = len(boxShape)
-    nSmooth = param.get('nSmooth', 32)
-    h = 0.5 * ( 3*nSmooth*V/(4*np.pi*N))**(1./nDim)
+    if kind == 'box':
+        
+        V = np.prod(boxShape)
+        N = len(snap)
+        nDim = len(boxShape)
+        nSmooth = param.get('nSmooth', 32)
+        h = 0.5 * ( 3*nSmooth*V/(4*np.pi*N))**(1./nDim)
+        
+    else:
+        
+        raise ValueError, 'Unrecognized kind {}'.format(kind)
+        
     return h
 
-def makeParam(snap, boxShape, fulloutput=False, runTimeScale=1., dampingScale=1.):
+def setupParamBounds(param, boxShape):
     """
-    Make a param dict for creating a glass
-    
-    The number of dimensions, len(boxShape), must be 1, 2, or 3.
-    """    
-    # Get default params
-    param = diskpy.utils.configparser(defaultparam)
-    # Set Box size
+    Sets up the dxPeriod, dyPeriod, and dzPeriod parameters in the .param file
+    dict according to boxShape.  boxShape is length 1, 2, or 3 depending on
+    how many dimensions the periodic box is in.
+    """
     nDim = len(boxShape)
     maxL = max(boxShape)
     if nDim < 3:
@@ -359,6 +405,52 @@ def makeParam(snap, boxShape, fulloutput=False, runTimeScale=1., dampingScale=1.
         param['dyPeriod'] = float(boxShape[-2])
         
     param['dzPeriod'] = float(boxShape[-1])
+    
+    if 'dPeriod' in param:
+        
+        param.pop('dPeriod', None)
+        
+        
+def makeNormalParam(snap, height, baseshape=[], fulloutput=False, 
+                    runTimeScale=1., dampingScale=1.):
+    """
+    Generate a .param dict for a glass normally distributed along the z-axis
+    """
+    # Get default params
+    param = diskpy.utils.configparser(defaultparam)
+    # Create a tall box for the simulation
+    boxShape = [dx for dx in baseshape]
+    boxShape.append(100 * height)
+    # Set Box size
+    setupParamBounds(param, boxShape)
+    # Calculate run-time
+    t = runTime(snap, param, boxShape, kind='normal') * runTimeScale
+    param['dDelta'] = t/param['nSteps']
+    # Setup output interval
+    if fulloutput:
+        
+        param['iOutInterval'] = 1
+        
+    else:
+        
+        param['iOutInterval'] = param['nSteps']
+        
+    h = estSmoothLength(snap, boxShape, param, kind='normal')
+    cs = getcs(snap, param)
+    param['dGlassDamper'] = float(cs/h) * dampingScale
+    
+    return param
+
+def makeBoxParam(snap, boxShape, fulloutput=False, runTimeScale=1., dampingScale=1.):
+    """
+    Make a param dict for creating a glass in a box
+    
+    The number of dimensions, len(boxShape), must be 1, 2, or 3.
+    """    
+    # Get default params
+    param = diskpy.utils.configparser(defaultparam)
+    # Set Box size
+    setupParamBounds(param, boxShape)
     # Calculate run-time
     t = runTime(snap, param, boxShape) * runTimeScale
     param['dDelta'] = t/param['nSteps']
